@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>RPG戰鬥小遊戲</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            color: #333;
+        }
+
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            width: min(400px, 100%);
+        }
+
+        .hp-bar {
+            width: 100%;
+            height: 20px;
+            background: #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 5px 0;
+        }
+        .hp-fill {
+            height: 100%;
+            transition: width 0.3s;
+        }
+        .player-hp { background: #4CAF50; }
+        .monster-hp { background: #f44336; }
+
+        .battle-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 20px 0;
+            position: relative;
+            height: 120px;
+        }
+
+        .character {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            animation: float 2s infinite ease-in-out;
+            position: relative;
+        }
+        .player { background: #2196F3; }
+        .monster { background: #ff9800; }
+
+        .info-box {
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 5px 0;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .equipment-info {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 5px;
+            margin-top: 5px;
+            font-size: 0.9em;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            color: white;
+            font-weight: bold;
+            transition: all 0.2s;
+            margin: 5px;
+        }
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .btn-battle { background: #2196F3; }
+        .btn-heal { background: #4CAF50; }
+        .btn-attack { background: #f44336; }
+
+        .event-log {
+            height: 200px;
+            overflow-y: auto;
+        }
+        .event-item {
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 5px;
+            animation: fadeIn 0.3s;
+        }
+        .event-combat { background: #ffebee; }
+        .event-reward { background: #f1f8e9; }
+        .event-milestone { background: #e8eaf6; }
+        .event-shop { background: #fff3e0; }
+
+        .score-display {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            font-size: 1.2em;
+            font-weight: bold;
+            z-index: 100;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            animation: modalFadeIn 0.3s;
+            max-width: 90%;
+            width: 400px;
+        }
+
+        .score-info {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 5px;
+        }
+
+        .score-info p {
+            margin: 10px 0;
+            font-size: 1.1em;
+        }
+
+        .damage-text {
+            position: absolute;
+            animation: float-up 0.8s forwards;
+            pointer-events: none;
+            font-weight: bold;
+            z-index: 100;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes modalFadeIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes float-up {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-30px); opacity: 0; }
+        }
+
+        .monster-info {
+            font-size: 0.8em;
+            color: #666;
+            text-align: center;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="score-display">
+        分數: <span id="currentScore">0</span>
+    </div>
+
+    <div class="container">
+        <h2 style="text-align: center; margin-bottom: 15px;">RPG戰鬥小遊戲</h2>
+        
+        <div class="info-box">
+            <div class="stats">
+                <div>關卡: <span id="level">1</span></div>
+                <div>金幣: <span id="coins">100</span></div>
+            </div>
+        </div>
+
+        <div>
+            <p>怪物血量: <span id="monsterHp">100</span>/<span id="monsterMaxHp">100</span></p>
+            <div class="hp-bar">
+                <div class="hp-fill monster-hp" id="monsterHpBar"></div>
+            </div>
+            <div class="monster-info" id="monsterInfo">
+                穿透: 30% | 傷害: 5-15
+            </div>
+        </div>
+
+        <div class="battle-area">
+            <div class="character player" id="player">玩家</div>
+            <div class="character monster" id="monster">怪物</div>
+        </div>
+
+        <div>
+            <p>玩家血量: <span id="playerHp">100</span>/<span id="playerMaxHp">100</span></p>
+            <div class="hp-bar">
+                <div class="hp-fill player-hp" id="playerHpBar"></div>
+            </div>
+        </div>
+
+        <div class="info-box">
+            <div class="equipment-info">
+                <div id="weaponInfo">武器攻擊: 10</div>
+                <div id="armorInfo">防具防禦: 0</div>
+            </div>
+        </div>
+
+        <div style="text-align: center">
+            <button onclick="game.useItem('heal')" class="btn btn-heal" id="healBtn">
+                補血藥水 (10金幣)
+            </button>
+            <button onclick="game.useItem('attack')" class="btn btn-attack" id="attackBtn">
+                攻擊藥水 (10金幣)
+            </button>
+        </div>
+        
+        <div style="text-align: center; margin-top: 10px">
+            <button onclick="game.toggleBattle()" id="battleBtn" class="btn btn-battle">
+                開始戰鬥
+            </button>
+            <button onclick="game.reset()" class="btn btn-battle">
+                重新開始
+            </button>
+        </div>
+    </div>
+    
+    <div class="container event-log" id="eventLog">
+        <h3>事件記錄</h3>
+    </div>
+
+    <div id="gameOverModal" class="modal">
+        <div class="modal-content">
+            <h2>遊戲結束！</h2>
+            <div class="score-info">
+                <p>存活時間: <span id="survivalTime">0</span></p>
+                <p>總分數: <span id="finalScore">0</span></p>
+                <p>擊殺數: <span id="killCount">0</span></p>
+                <p>最高等級: <span id="maxLevel">0</span></p>
+            </div>
+            <button onclick="game.reset()" class="btn btn-battle">再次遊玩</button>
+        </div>
+    </div>
+<script>
+// 遊戲配置
+const CONFIG = {
+    initial: {
+        coins: 100,
+        hp: 105,
+        attack: 10,
+        defense: 0
+    },
+    scoring: {
+        baseKill: 100,      // 基礎擊殺分數
+        levelBonus: 50,     // 每級分數獎勵
+        coinBonus: 0.5      // 金幣分數係數
+    },
+    equipment: {
+        dropRate: 0.6,      // 60% 掉落率
+        weapon: {
+            baseMin: 15,    // 基礎最小攻擊
+            baseMax: 25,    // 基礎最大攻擊
+            levelBonus: 5   // 每3級增加
+        },
+        armor: {
+            baseMin: 8,     // 基礎最小防禦
+            baseMax: 15,    // 基礎最大防禦
+            levelBonus: 3,  // 每3級增加
+            effectiveness: 0.7  // 防具效果
+        }
+    },
+    monster: {
+        base: {
+            hp: 100,
+            damageMin: 5,
+            damageMax: 15,
+            penetration: 0.3  // 基礎穿透30%
+        },
+        growth: {
+            hp: 5,            // 每級+5血
+            damage: 2,        // 每級+2傷害
+            penetration: 0.02 // 每級+2%穿透
+        },
+        special: {
+            chance: 0.2,      // 20%特殊攻擊機率
+            multiplier: 1.5   // 特殊攻擊1.5倍傷害
+        }
+    },
+    items: {
+        heal: {
+            cost: 10,
+            percent: 0.15  // 回復15%最大生命
+        },
+        attack: {
+            cost: 10,
+            bonus: 2      // +2攻擊
+        }
+    }
+};
+
+// 怪物類
+class Monster {
+    constructor(level) {
+        this.level = level;
+        this.initStats();
+    }
+
+    initStats() {
+        const base = CONFIG.monster.base;
+        const growth = CONFIG.monster.growth;
+        
+        this.hp = base.hp + (growth.hp * this.level);
+        this.maxHp = this.hp;
+        this.damageMin = base.damageMin + (growth.damage * this.level);
+        this.damageMax = base.damageMax + (growth.damage * this.level);
+        this.penetration = Math.min(0.8, base.penetration + 
+            (growth.penetration * this.level));
+    }
+
+    attack(playerDefense) {
+        const baseDamage = game.random(this.damageMin, this.damageMax);
+        const isSpecial = Math.random() < CONFIG.monster.special.chance;
+        
+        // 考慮穿透的實際防禦
+        const effectiveDefense = playerDefense * 
+            CONFIG.equipment.armor.effectiveness * (1 - this.penetration);
+        let finalDamage = Math.max(1, baseDamage - effectiveDefense);
+        
+        if (isSpecial) {
+            finalDamage *= CONFIG.monster.special.multiplier;
+        }
+
+        return {
+            damage: Math.round(finalDamage),
+            isSpecial
+        };
+    }
+}
+
+// 遊戲狀態
+const state = {
+    level: 1,
+    score: 0,
+    coins: CONFIG.initial.coins,
+    player: {
+        hp: CONFIG.initial.hp,
+        maxHp: CONFIG.initial.hp,
+        attack: CONFIG.initial.attack,
+        defense: CONFIG.initial.defense,
+        bonusAttack: 0,
+        weapon: "初始劍",
+        armor: "初始防具"
+    },
+    monster: null,
+    battleInterval: null,
+    startTime: null,
+    endTime: null
+};
+
+// 遊戲核心
+const game = {
+    // 工具函數
+    random(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    },
+
+    showDamage(value, target, color = 'red') {
+        const element = document.createElement('div');
+        element.className = 'damage-text';
+        element.style.color = color;
+        element.textContent = value;
+        
+        const targetEl = document.getElementById(target);
+        const rect = targetEl.getBoundingClientRect();
+        element.style.left = `${rect.left + rect.width/2}px`;
+        element.style.top = `${rect.top}px`;
+        
+        document.body.appendChild(element);
+        setTimeout(() => element.remove(), 800);
+    },
+
+    log(message, type) {
+        const eventLog = document.getElementById('eventLog');
+        const eventItem = document.createElement('div');
+        eventItem.className = `event-item event-${type}`;
+        eventItem.textContent = message;
+        eventLog.insertBefore(eventItem, eventLog.children[1]);
+        
+        while (eventLog.children.length > 11) {
+            eventLog.removeChild(eventLog.lastChild);
+        }
+    },
+
+    // 裝備系統
+    generateEquipment(type) {
+        const config = CONFIG.equipment[type];
+        const levelBonus = Math.floor(state.level / 3) * config.levelBonus;
+        const value = this.random(
+            config.baseMin + levelBonus,
+            config.baseMax + levelBonus
+        );
+        
+        return {
+            type,
+            value,
+            name: type === 'weapon' ? 
+                  `Level ${state.level} 武器` : 
+                  `Level ${state.level} 防具`
+        };
+    },
+
+    dropEquipment() {
+        const isWeapon = Math.random() < 0.5;
+        const equipment = this.generateEquipment(isWeapon ? 'weapon' : 'armor');
+        const currentValue = isWeapon ? state.player.attack : state.player.defense;
+
+        if (confirm(
+            `獲得 ${equipment.name}！\n` +
+            `${isWeapon ? '攻擊力' : '防禦力'}: ${equipment.value}\n` +
+            `當前數值: ${currentValue}\n` +
+            `是否裝備？`
+        )) {
+            if (isWeapon) {
+                state.player.attack = equipment.value;
+                state.player.weapon = equipment.name;
+            } else {
+                state.player.defense = equipment.value;
+                state.player.armor = equipment.name;
+            }
+            this.log(`裝備 ${equipment.name}，${isWeapon ? '攻擊力' : '防禦力'}提升至 ${equipment.value}`, 'reward');
+        }
+    },
+
+    // 戰鬥系統
+    battle() {
+        // 玩家攻擊
+        const playerDamage = state.player.attack + state.player.bonusAttack;
+        state.monster.hp = Math.max(0, state.monster.hp - playerDamage);
+        this.showDamage(playerDamage, 'monster');
+        this.log(`玩家造成 ${playerDamage} 點傷害`, 'combat');
+
+        if (state.monster.hp <= 0) {
+            this.monsterDefeated();
+            return;
+        }
+
+        // 怪物攻擊
+        setTimeout(() => {
+            const attackResult = state.monster.attack(state.player.defense);
+            state.player.hp = Math.max(0, state.player.hp - attackResult.damage);
+            
+            this.showDamage(
+                attackResult.damage, 
+                'player', 
+                attackResult.isSpecial ? '#FF5722' : 'red'
+            );
+            
+            let message = `怪物造成 ${attackResult.damage} 點傷害`;
+            if (attackResult.isSpecial) {
+                message += ' (特殊攻擊！)';
+            }
+            this.log(message, 'combat');
+
+            if (state.player.hp <= 0) {
+                this.gameOver();
+                return;
+            }
+
+            this.updateUI();
+        }, 500);
+    },
+
+    monsterDefeated() {
+        clearInterval(state.battleInterval);
+        state.battleInterval = null;
+
+        // 計算獎勵
+        const baseScore = CONFIG.scoring.baseKill;
+        const levelBonus = state.level * CONFIG.scoring.levelBonus;
+        const coinBonus = Math.floor(state.coins * CONFIG.scoring.coinBonus);
+        const totalScore = baseScore + levelBonus + coinBonus;
+        
+        state.score += totalScore;
+        this.showDamage(`+${totalScore}分`, 'monster', '#9c27b0');
+
+        // 金幣獎勵
+        const coins = 20 + this.random(10, 30) + state.level;
+        state.coins += coins;
+        this.showDamage(`+${coins}金幣`, 'monster', 'gold');
+
+        // 裝備掉落
+        if (Math.random() < CONFIG.equipment.dropRate) {
+            this.dropEquipment();
+        }
+
+        // 升級
+        state.level++;
+        state.monster = new Monster(state.level);
+        state.player.hp = state.player.maxHp;
+
+        this.log(`擊敗怪物！獲得 ${totalScore} 分數和 ${coins} 金幣`, 'reward');
+        this.updateUI();
+    },
+
+    gameOver() {
+        clearInterval(state.battleInterval);
+        state.endTime = new Date();
+
+        const survivalTime = Math.floor((state.endTime - state.startTime) / 1000);
+        const minutes = Math.floor(survivalTime / 60);
+        const seconds = survivalTime % 60;
+
+        document.getElementById('survivalTime').textContent = 
+            `${minutes}分 ${seconds}秒`;
+        document.getElementById('finalScore').textContent = state.score;
+        document.getElementById('killCount').textContent = state.level - 1;
+        document.getElementById('maxLevel').textContent = state.level;
+        document.getElementById('gameOverModal').style.display = 'flex';
+    },
+
+    // 物品系統
+    useItem(type) {
+        const config = CONFIG.items[type];
+        if (state.coins < config.cost) {
+            this.log('金幣不足', 'shop');
+            return;
+        }
+
+        state.coins -= config.cost;
+
+        if (type === 'heal' && state.player.hp < state.player.maxHp) {
+            const healAmount = Math.floor(state.player.maxHp * config.percent);
+            state.player.hp = Math.min(state.player.maxHp, state.player.hp + healAmount);
+            this.showDamage(`+${healAmount}`, 'player', '#4CAF50');
+            this.log(`使用補血藥水，恢復 ${healAmount} 點生命`, 'shop');
+        } else if (type === 'attack') {
+            state.player.bonusAttack += config.bonus;
+            this.showDamage(`+${config.bonus}攻擊`, 'player', '#2196F3');
+            this.log(`使用攻擊藥水，攻擊力 +${config.bonus}`, 'shop');
+        }
+
+        this.updateUI();
+    },
+
+    // UI更新
+    updateUI() {
+        // 更新數值
+        document.getElementById('level').textContent = state.level;
+        document.getElementById('coins').textContent = state.coins;
+        document.getElementById('currentScore').textContent = state.score;
+
+        // 更新血量
+        document.getElementById('playerHp').textContent = state.player.hp;
+        document.getElementById('playerMaxHp').textContent = state.player.maxHp;
+        document.getElementById('monsterHp').textContent = state.monster.hp;
+        document.getElementById('monsterMaxHp').textContent = state.monster.maxHp;
+
+        // 更新血條
+        document.getElementById('playerHpBar').style.width = 
+            `${(state.player.hp/state.player.maxHp)*100}%`;
+        document.getElementById('monsterHpBar').style.width = 
+            `${(state.monster.hp/state.monster.maxHp)*100}%`;
+
+        // 更新裝備信息
+        document.getElementById('weaponInfo').textContent = 
+            `${state.player.weapon} (攻擊: ${state.player.attack}${
+                state.player.bonusAttack ? ` +${state.player.bonusAttack}` : ''
+            })`;
+        document.getElementById('armorInfo').textContent = 
+            `${state.player.armor} (防禦: ${state.player.defense})`;
+
+        // 更新怪物信息
+        document.getElementById('monsterInfo').textContent = 
+            `穿透: ${Math.round(state.monster.penetration * 100)}% | ` +
+            `傷害: ${state.monster.damageMin}-${state.monster.damageMax}`;
+
+        // 更新按鈕狀態
+        document.getElementById('healBtn').disabled = 
+            state.coins < CONFIG.items.heal.cost || 
+            state.player.hp >= state.player.maxHp;
+        document.getElementById('attackBtn').disabled = 
+            state.coins < CONFIG.items.attack.cost;
+    },
+
+    // 遊戲控制
+    toggleBattle() {
+        if (state.battleInterval) {
+            clearInterval(state.battleInterval);
+            state.battleInterval = null;
+            document.getElementById('battleBtn').textContent = '開始戰鬥';
+            this.log('暫停戰鬥', 'combat');
+        } else {
+            state.battleInterval = setInterval(() => this.battle(), 1000);
+            document.getElementById('battleBtn').textContent = '停止戰鬥或者繼續';
+            this.log('開始戰鬥', 'combat');
+        }
+    },
+
+    reset() {
+        if (state.battleInterval) {
+            clearInterval(state.battleInterval);
+            state.battleInterval = null;
+        }
+        
+        Object.assign(state, {
+            level: 1,
+            score: 0,
+            coins: CONFIG.initial.coins,
+            player: {
+                hp: CONFIG.initial.hp,
+                maxHp: CONFIG.initial.hp,
+                attack: CONFIG.initial.attack,
+                defense: CONFIG.initial.defense,
+                bonusAttack: 0,
+                weapon: "初始劍",
+                armor: "初始防具"
+            },
+            monster: new Monster(1),
+            startTime: new Date()
+        });
+
+        document.getElementById('gameOverModal').style.display = 'none';
+        document.getElementById('battleBtn').textContent = '開始戰鬥';
+        document.getElementById('eventLog').innerHTML = '<h3>事件記錄</h3>';
+        this.log('遊戲重置', 'milestone');
+        this.updateUI();
+    },
+
+    init() {
+        state.monster = new Monster(1);
+        state.startTime = new Date();
+        this.updateUI();
+        this.log('遊戲開始！', 'milestone');
+    }
+};
+
+// 初始化遊戲
+game.init();
+</script>
+</body>
+</html>
